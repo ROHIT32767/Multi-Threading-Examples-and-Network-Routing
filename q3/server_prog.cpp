@@ -14,6 +14,8 @@
 #include <iostream>
 #include <assert.h>
 #include <tuple>
+#include <bits/stdc++.h>
+typedef pair<int, int> ii;
 using namespace std;
 /////////////////////////////
 
@@ -128,8 +130,29 @@ close_client_socket_ceremony:
 int main(int argc, char *argv[])
 {
 
-    int i, j, k, t, n;
-
+    int n,m;
+    cin >> n >> m;
+    vector< vector< pair<int, int> > > adj;
+    vector<int> distance_vector[n];
+    for(int i=0;i<n;i++)
+    {
+        distance_vector[i]=vector<int>(m,INT_MAX);
+    }
+    for(int i=0;i<m;i++)
+    {
+        int a,b,d;
+        cin >> a >> b >> d;
+        distance_vector[a][b]=d;
+        distance_vector[b][a]=d;
+    }
+    adj.assign(n, vector<ii>()); 
+ 
+    for(int i = 0; i < m; i++){
+        int a, b, d;
+        cin >> a >> b >> d;
+        adj[a].push_back({b, d});
+        adj[b].push_back({a, d});
+    }
     int wel_socket_fd, client_socket_fd, port_number;
     socklen_t clilen;
 
@@ -207,4 +230,4 @@ more precisely, a new socket that is dedicated to that particular client.
     close(wel_socket_fd);
     return 0;
 }
-Footer
+
