@@ -11,15 +11,16 @@
 #include <fcntl.h>
 
 /////////////////////////////
-#include <iostream>
+// #include <iostream>
 #include <assert.h>
 #include <tuple>
 #include <bits/stdc++.h>
 typedef pair<int, int> ii;
 using namespace std;
+const int INF = 1000000000;
 /////////////////////////////
 
-//Regular bold text
+// Regular bold text
 #define BBLK "\e[1;30m"
 #define BRED "\e[1;31m"
 #define BGRN "\e[1;32m"
@@ -126,33 +127,61 @@ close_client_socket_ceremony:
     printf(BRED "Disconnected from client" ANSI_RESET "\n");
     // return NULL;
 }
-
+void find_path(int current_vertex, vector<int> parent, vector<int> path)
+{
+    if (current_vertex == -1)
+    {
+        return;
+    }
+    find_path(parent[current_vertex],parent,path);
+    path.push_back(current_vertex);
+}
 int main(int argc, char *argv[])
 {
-
-    int n,m;
+    int n, m;
     cin >> n >> m;
-    vector< vector< pair<int, int> > > adj;
-    vector<int> distance_vector[n];
-    for(int i=0;i<n;i++)
+    vector<vector<pair<int, int>>> adj;
+    adj.assign(n, vector<pair<int, int>>());
+    for (int i = 0; i < m; i++)
     {
-        distance_vector[i]=vector<int>(m,INT_MAX);
-    }
-    for(int i=0;i<m;i++)
-    {
-        int a,b,d;
-        cin >> a >> b >> d;
-        distance_vector[a][b]=d;
-        distance_vector[b][a]=d;
-    }
-    adj.assign(n, vector<ii>()); 
- 
-    for(int i = 0; i < m; i++){
         int a, b, d;
         cin >> a >> b >> d;
         adj[a].push_back({b, d});
         adj[b].push_back({a, d});
     }
+    /***************djikstra*********************/
+    vector<int> dist(n, INF);
+    priority_queue<pair<int, int>, vector<pair<int, int>>, greater<pair<int, int>>> pq;
+    dist[0] = 0;
+    vector<int> parent(n,-1);
+    pq.push(make_pair(0, 0));
+    while (!pq.empty())
+    {
+        ii front = pq.top();
+        pq.pop();
+        int d = front.first, u = front.second;
+        if (d > dist[u])
+        {
+            continue;
+        }
+        for (int j = 0; j < adj[u].size(); j++)
+        {
+            ii v = adj[u][j];
+            if (dist[u] + v.second < dist[v.first])
+            {
+                dist[v.first] = dist[u] + v.second;
+                parent[v.first] = u;
+                pq.push(make_pair(dist[v.first], v.first));
+            }
+        }
+    }
+    vector<int> path[n];
+    path[0] = {};
+    for (int i = 1; i < n; i++)
+    {
+        find_path(i,parent,path[i]);
+    }
+    /********************************************/
     int wel_socket_fd, client_socket_fd, port_number;
     socklen_t clilen;
 
@@ -161,11 +190,11 @@ int main(int argc, char *argv[])
     /* create socket */
     /*
     The server program must have a special door—more precisely,
-    a special socket—that welcomes some initial contact 
+    a special socket—that welcomes some initial contact
     from a client process running on an arbitrary host
     */
-    //get welcoming socket
-    //get ip,port
+    // get welcoming socket
+    // get ip,port
     /////////////////////////
     wel_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (wel_socket_fd < 0)
@@ -181,7 +210,7 @@ int main(int argc, char *argv[])
     serv_addr_obj.sin_family = AF_INET;
     // On the server side I understand that INADDR_ANY will bind the port to all available interfaces,
     serv_addr_obj.sin_addr.s_addr = INADDR_ANY;
-    serv_addr_obj.sin_port = htons(port_number); //process specifies port
+    serv_addr_obj.sin_port = htons(port_number); // process specifies port
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////
     /* bind socket to this port number on this machine */
@@ -191,7 +220,7 @@ int main(int argc, char *argv[])
        descriptor wel_sock_fd.  addrlen specifies the size, in bytes, of the
        address structure pointed to by addr.  */
 
-    //CHECK WHY THE CASTING IS REQUIRED
+    // CHECK WHY THE CASTING IS REQUIRED
     if (bind(wel_socket_fd, (struct sockaddr *)&serv_addr_obj, sizeof(serv_addr_obj)) < 0)
     {
         perror("Error on bind on welcome socket: ");
@@ -211,9 +240,9 @@ int main(int argc, char *argv[])
         /*
         During the three-way handshake, the client process knocks on the welcoming door
 of the server process. When the server “hears” the knocking, it creates a new door—
-more precisely, a new socket that is dedicated to that particular client. 
+more precisely, a new socket that is dedicated to that particular client.
         */
-        //accept is a blocking call
+        // accept is a blocking call
         printf("Waiting for a new client to request for a connection\n");
         client_socket_fd = accept(wel_socket_fd, (struct sockaddr *)&client_addr_obj, &clilen);
         if (client_socket_fd < 0)
@@ -223,11 +252,10 @@ more precisely, a new socket that is dedicated to that particular client.
         }
 
         printf(BGRN "New client connected from port number %d and IP %s \n" ANSI_RESET, ntohs(client_addr_obj.sin_port), inet_ntoa(client_addr_obj.sin_addr));
-        
+
         handle_connection(client_socket_fd);
     }
 
     close(wel_socket_fd);
     return 0;
 }
-
