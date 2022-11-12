@@ -15,7 +15,7 @@
 #include <assert.h>
 #include <tuple>
 #include <bits/stdc++.h>
-typedef pair<int, int> ii;
+// typedef pair<int, int> ii;
 using namespace std;
 const int INF = 1000000000;
 /////////////////////////////
@@ -46,6 +46,28 @@ const int initial_msg_len = 256;
 
 const LL buff_sz = 1048576;
 ///////////////////////////////////////////////////
+
+/******************global variables*************/
+vector<vector<pair<int, int>>> adj;
+vector<int> parent;
+vector<int> dist;
+vector<string> argument_string;
+int total_vertices = 0;
+int total_edges = 0;
+vector<vector<int>> path;
+int destination = -1;
+int source = 0;
+vector<int> sokcet_id;
+/***********************************************/
+bool isNumber(const string& s)
+{
+    for (char const &ch : s) {
+        if (std::isdigit(ch) == 0)
+            return false;
+    }
+    return true;
+}
+
 pair<string, int> read_string_from_socket(const int &fd, int bytes)
 {
     std::string output;
@@ -87,7 +109,7 @@ void handle_connection(int client_socket_fd)
 
     /* read message from client */
     int ret_val = 1;
-
+    pthread_t node_threads[total_vertices];
     while (true)
     {
         string cmd;
@@ -108,11 +130,43 @@ void handle_connection(int client_socket_fd)
             goto close_client_socket_ceremony;
         }
         string msg_to_send_back = "Ack: " + cmd;
-
+        argument_string = {};
+        stringstream ss(cmd);
+        string word;
+        while (ss >> word)
+        {
+            argument_string.push_back(word);
+        }
+        if (argument_string.size() == 1 && argument_string[0] == "pt")
+        {
+            int col_width = 10;
+            cout << setw(col_width) << "dest";
+            cout << setw(col_width) << "forw";
+            cout << setw(col_width) << "delay" << endl;
+            for (int i = 1; i < total_vertices; i++)
+            {
+                if (path[i].size() != 1)
+                {
+                    cout << setw(col_width) << i;
+                    cout << setw(col_width) << path[i][1];
+                    cout << setw(col_width) << dist[i] << endl;
+                }
+                else
+                {
+                    cout << setw(col_width) << i;
+                    cout << setw(col_width) << "None";
+                    cout << setw(col_width) << dist[i] << endl;
+                }
+            }
+        }
+        if (argument_string.size() == 3 && argument_string[0] == "send" && isNumber(argument_string[1]) && (stoi(argument_string[1]) < total_vertices) && (stoi(argument_string[1]) >= 0))
+        {
+            
+        }
+        // fflush(stdout);
         ////////////////////////////////////////
         // "If the server write a message on the socket and then close it before the client's read. Will the client be able to read the message?"
         // Yes. The client will get the data that was sent before the FIN packet that closes the socket.
-
         int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
         // debug(sent_to_client);
         if (sent_to_client == -1)
@@ -121,26 +175,26 @@ void handle_connection(int client_socket_fd)
             goto close_client_socket_ceremony;
         }
     }
-
 close_client_socket_ceremony:
     close(client_socket_fd);
     printf(BRED "Disconnected from client" ANSI_RESET "\n");
     // return NULL;
 }
-void find_path(int current_vertex, vector<int> parent, vector<int> path)
+void find_path(int current_vertex, vector<int> &parent, vector<int> &path)
 {
     if (current_vertex == -1)
     {
         return;
     }
-    find_path(parent[current_vertex],parent,path);
+    find_path(parent[current_vertex], parent, path);
     path.push_back(current_vertex);
 }
 int main(int argc, char *argv[])
 {
     int n, m;
     cin >> n >> m;
-    vector<vector<pair<int, int>>> adj;
+    total_edges = m;
+    total_vertices = n;
     adj.assign(n, vector<pair<int, int>>());
     for (int i = 0; i < m; i++)
     {
@@ -150,14 +204,14 @@ int main(int argc, char *argv[])
         adj[b].push_back({a, d});
     }
     /***************djikstra*********************/
-    vector<int> dist(n, INF);
+    dist.assign(n, INF);
     priority_queue<pair<int, int>, vector<pair<int, int>>, greater<pair<int, int>>> pq;
     dist[0] = 0;
-    vector<int> parent(n,-1);
+    parent.assign(n, -1);
     pq.push(make_pair(0, 0));
     while (!pq.empty())
     {
-        ii front = pq.top();
+        pair<int, int> front = pq.top();
         pq.pop();
         int d = front.first, u = front.second;
         if (d > dist[u])
@@ -166,7 +220,7 @@ int main(int argc, char *argv[])
         }
         for (int j = 0; j < adj[u].size(); j++)
         {
-            ii v = adj[u][j];
+            pair<int, int> v = adj[u][j];
             if (dist[u] + v.second < dist[v.first])
             {
                 dist[v.first] = dist[u] + v.second;
@@ -175,12 +229,13 @@ int main(int argc, char *argv[])
             }
         }
     }
-    vector<int> path[n];
-    path[0] = {};
+    path.assign(n, vector<int>());
+    path[0] = {0};
     for (int i = 1; i < n; i++)
     {
-        find_path(i,parent,path[i]);
+        find_path(i, parent, path[i]);
     }
+    sokcet_id.assign(n,-1);
     /********************************************/
     int wel_socket_fd, client_socket_fd, port_number;
     socklen_t clilen;
@@ -233,6 +288,7 @@ int main(int argc, char *argv[])
     listen(wel_socket_fd, MAX_CLIENTS);
     cout << "Server has started listening on the LISTEN PORT" << endl;
     clilen = sizeof(client_addr_obj);
+    /**************Creating edge sockets*************************/
 
     while (1)
     {
