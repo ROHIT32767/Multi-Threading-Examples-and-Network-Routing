@@ -130,7 +130,6 @@ void *wash_machine(void *arg)
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec += patience;
-
     int rc = sem_timedwait(&curr_sem, &ts);
     if (rc == -1)
     {
