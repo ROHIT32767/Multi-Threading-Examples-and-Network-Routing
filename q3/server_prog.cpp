@@ -57,7 +57,7 @@ int total_edges = 0;
 vector<vector<int>> path;
 int destination = -1;
 int source = 0;
-vector<int> sokcet_id;
+map <pair<int,int>,int> M;
 /***********************************************/
 bool isNumber(const string& s)
 {
@@ -67,12 +67,15 @@ bool isNumber(const string& s)
     }
     return true;
 }
+void *thread_func(void *arg)
+{
 
+    
+}
 pair<string, int> read_string_from_socket(const int &fd, int bytes)
 {
     std::string output;
     output.resize(bytes);
-
     int bytes_received = read(fd, &output[0], bytes - 1);
     debug(bytes_received);
     if (bytes_received <= 0)
@@ -99,6 +102,7 @@ int send_string_on_socket(int fd, const string &s)
 }
 
 ///////////////////////////////
+
 
 void handle_connection(int client_socket_fd)
 {
@@ -161,9 +165,9 @@ void handle_connection(int client_socket_fd)
         }
         if (argument_string.size() == 3 && argument_string[0] == "send" && isNumber(argument_string[1]) && (stoi(argument_string[1]) < total_vertices) && (stoi(argument_string[1]) >= 0))
         {
+            destination = stoi(argument_string[1]);
             
         }
-        // fflush(stdout);
         ////////////////////////////////////////
         // "If the server write a message on the socket and then close it before the client's read. Will the client be able to read the message?"
         // Yes. The client will get the data that was sent before the FIN packet that closes the socket.
@@ -196,12 +200,15 @@ int main(int argc, char *argv[])
     total_edges = m;
     total_vertices = n;
     adj.assign(n, vector<pair<int, int>>());
+    M[make_pair(-1,0)]=socket(AF_INET, SOCK_STREAM, 0);
     for (int i = 0; i < m; i++)
     {
         int a, b, d;
         cin >> a >> b >> d;
         adj[a].push_back({b, d});
+        M[make_pair(a,b)]=socket(AF_INET, SOCK_STREAM, 0);
         adj[b].push_back({a, d});
+        M[make_pair(b,a)]=socket(AF_INET, SOCK_STREAM, 0);
     }
     /***************djikstra*********************/
     dist.assign(n, INF);
@@ -235,11 +242,9 @@ int main(int argc, char *argv[])
     {
         find_path(i, parent, path[i]);
     }
-    sokcet_id.assign(n,-1);
     /********************************************/
     int wel_socket_fd, client_socket_fd, port_number;
     socklen_t clilen;
-
     struct sockaddr_in serv_addr_obj, client_addr_obj;
     /////////////////////////////////////////////////////////////////////////
     /* create socket */
