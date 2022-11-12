@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 /////////////////////////////
 // #include <iostream>
@@ -60,7 +61,9 @@ int source = 0;
 int current_index = 0;
 int max_index = -1;
 map<pair<int, int>, int> M;
-int send = 0;
+map<pair<int, int>, int> port_number_map;
+int send_func = 0;
+int address = INADDR_ANY;
 /***********************************************/
 bool isNumber(const string &s)
 {
@@ -71,40 +74,7 @@ bool isNumber(const string &s)
     }
     return true;
 }
-void *thread_func(void *arg)
-{
-    int index_of_thread = (int)arg;
-    int parent_of_thread = parent[index_of_thread];
-    int wel_socket_fd = M[make_pair(parent_of_thread, index_of_thread)];
-    int client_socket_fd, port_number;
-    socklen_t clilen;
-    struct sockaddr_in serv_addr_obj, client_addr_obj;
-    bzero((char *)&serv_addr_obj, sizeof(serv_addr_obj));
-    port_number = PORT_ARG;
-    serv_addr_obj.sin_family = AF_INET;
-    serv_addr_obj.sin_addr.s_addr = INADDR_ANY;
-    serv_addr_obj.sin_port = htons(port_number); // process specifies port
-    if (bind(wel_socket_fd, (struct sockaddr *)&serv_addr_obj, sizeof(serv_addr_obj)) < 0)
-    {
-        perror("Error on bind on welcome socket: ");
-        exit(-1);
-    }
-    listen(wel_socket_fd, MAX_CLIENTS);
-    clilen = sizeof(client_addr_obj);
-    while (1)
-    {
-        client_socket_fd = accept(wel_socket_fd, (struct sockaddr *)&client_addr_obj, &clilen);
-        if (client_socket_fd < 0)
-        {
-            perror("ERROR while accept() system call occurred in SERVER");
-            exit(-1);
-        }
-        string s1 = handle_connection(client_socket_fd);
-        cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : " << i << "; Message :" << "\"" << s1 << "\"" << endl;
-        send_string_on_socket()
-    }
-    close(wel_socket_fd);
-}
+
 pair<string, int> read_string_from_socket(const int &fd, int bytes)
 {
     std::string output;
@@ -162,8 +132,8 @@ string handle_connection(int client_socket_fd)
             cout << "Exit pressed by client" << endl;
             goto close_client_socket_ceremony;
         }
-        string msg_to_send_back = "Ack: " + cmd;
-        if (!send)
+        string msg_to_send_back = cmd;
+        if (!send_func)
         {
             argument_string = {};
             stringstream ss(cmd);
@@ -206,8 +176,9 @@ string handle_connection(int client_socket_fd)
             }
             else if (argument_string.size() == 3 && argument_string[0] == "send" && isNumber(argument_string[1]) && (stoi(argument_string[1]) < total_vertices) && (stoi(argument_string[1]) >= 0))
             {
+                printf("entered send\n");
                 destination = stoi(argument_string[1]);
-                send = 1;
+                send_func = 1;
                 int start_client = send_string_on_socket(M[{-1, 0}], argument_string[2]);
                 if (start_client == -1)
                 {
@@ -221,7 +192,7 @@ string handle_connection(int client_socket_fd)
                     perror("Error while writing to client. Seems socket has been closed");
                     goto close_client_socket_ceremony;
                 }
-                send = 0;
+                send_func = 0;
             }
         }
         else
@@ -236,13 +207,62 @@ string handle_connection(int client_socket_fd)
                 perror("Error while writing to client. Seems socket has been closed");
                 goto close_client_socket_ceremony;
             }
-
+            return msg_to_send_back;
         }
     }
 close_client_socket_ceremony:
     close(client_socket_fd);
     printf(BRED "Disconnected from client" ANSI_RESET "\n");
-    // return NULL;
+    return NULL;
+}
+void *thread_func(void *arg)
+{
+    int index_of_thread = *(int *)arg;
+    int parent_of_thread = parent[index_of_thread];
+    int wel_socket_fd = M[make_pair(parent_of_thread, index_of_thread)];
+    int client_socket_fd, port_number;
+    socklen_t clilen;
+    struct sockaddr_in serv_addr_obj, client_addr_obj;
+    bzero((char *)&serv_addr_obj, sizeof(serv_addr_obj));
+    port_number = port_number = port_number_map[(make_pair(parent_of_thread, index_of_thread))];;
+    serv_addr_obj.sin_family = AF_INET;
+    serv_addr_obj.sin_addr.s_addr = INADDR_ANY;
+    serv_addr_obj.sin_port = htons(port_number); // process specifies port
+    if (bind(wel_socket_fd, (struct sockaddr *)&serv_addr_obj, sizeof(serv_addr_obj)) < 0)
+    {
+        perror("Error on bind on welcome socket: ");
+        exit(-1);
+    }
+    listen(wel_socket_fd, MAX_CLIENTS);
+    clilen = sizeof(client_addr_obj);
+    while (1)
+    {
+        client_socket_fd = accept(wel_socket_fd, (struct sockaddr *)&client_addr_obj, &clilen);
+        if (client_socket_fd < 0)
+        {
+            perror("ERROR while accept() system call occurred in SERVER");
+            exit(-1);
+        }
+        string s1 = handle_connection(client_socket_fd);
+        if (index_of_thread == destination)
+        {
+            cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
+                 << " None ; Message :"
+                 << "\"" << s1 << "\"" << endl;
+        }
+        else
+        {
+            current_index++;
+            int next_index = path[destination][current_index];
+            int file_descriptor = M[make_pair(index_of_thread, next_index)];
+            cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
+                 << "; Message :"
+                 << "\"" << s1 << "\"" << endl;
+            send_string_on_socket(file_descriptor, s1);
+        }
+    }
+    close(wel_socket_fd);
+    return NULL;
 }
 void find_path(int current_vertex, vector<int> &parent, vector<int> &path)
 {
@@ -261,14 +281,22 @@ int main(int argc, char *argv[])
     total_vertices = n;
     adj.assign(n, vector<pair<int, int>>());
     M[make_pair(-1, 0)] = socket(AF_INET, SOCK_STREAM, 0);
+    port_number_map[make_pair(-1, 0)] = 8002;
+    int current_port_number = 8003;
     for (int i = 0; i < m; i++)
     {
         int a, b, d;
         cin >> a >> b >> d;
         adj[a].push_back({b, d});
         M[make_pair(a, b)] = socket(AF_INET, SOCK_STREAM, 0);
+        cout << a << "," << b << " " << M[make_pair(a, b)] << endl;
+        port_number_map[make_pair(a, b)] = current_port_number;
+        current_port_number++;
         adj[b].push_back({a, d});
         M[make_pair(b, a)] = socket(AF_INET, SOCK_STREAM, 0);
+        cout << b << "," << a << " " << M[make_pair(b, a)] << endl;
+        port_number_map[make_pair(a, b)] = current_port_number;
+        current_port_number++;
     }
     /***************djikstra*********************/
     dist.assign(n, INF);
@@ -343,7 +371,7 @@ int main(int argc, char *argv[])
     // CHECK WHY THE CASTING IS REQUIRED
     if (bind(wel_socket_fd, (struct sockaddr *)&serv_addr_obj, sizeof(serv_addr_obj)) < 0)
     {
-        perror("Error on bind on welcome socket: ");
+        perror("Error on bind on welcome socket: main");
         exit(-1);
     }
     //////////////////////////////////////////////////////////////////////////////////////
@@ -376,7 +404,9 @@ more precisely, a new socket that is dedicated to that particular client.
         pthread_t node_threads[total_vertices];
         for (int i = 0; i < total_vertices; i++)
         {
-            pthread_create(&node_threads[i], NULL, thread_func, &i);
+            int index_m = i;
+            pthread_create(&node_threads[i], NULL, thread_func, &index_m);
+            sleep(1);
         }
         handle_connection(client_socket_fd);
         for (int i = 0; i < total_vertices; i++)
