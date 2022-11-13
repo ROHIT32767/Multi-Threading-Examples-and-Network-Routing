@@ -61,6 +61,7 @@ int source = 0;
 int current_index = 0;
 int max_index = -1;
 map<int, int> port_number_map;
+map<int,int> socket_map;
 int send_func = 0;
 int address = INADDR_ANY;
 /***********************************************/
@@ -78,10 +79,10 @@ pair<string, int> read_string_from_socket(const int &fd, int bytes)
     std::string output;
     output.resize(bytes);
     int bytes_received = read(fd, &output[0], bytes - 1);
-    debug(bytes_received);
+  //  debug(bytes_received);
     if (bytes_received <= 0)
     {
-        cerr << "Failed to read data from socket. \n";
+        cout << "Failed to read data from socket. \n";
     }
     output[bytes_received] = 0;
     output.resize(bytes_received);
@@ -175,7 +176,8 @@ string handle_connection(int client_socket_fd)
                 printf("entered send\n");
                 destination = stoi(argument_string[1]);
                 send_func = 1;
-                int start_client = send_string_on_socket(M[{-1, 0}], argument_string[2]);
+                int start_client = send_string_on_socket(socket_map[0], argument_string[2]);
+                current_index++;
                 if (start_client == -1)
                 {
                     perror("Error while writing to start client.Seems socket has been closed");
@@ -195,11 +197,7 @@ string handle_connection(int client_socket_fd)
         }
         else
         {
-            ////////////////////////////////////////
-            // "If the server write a message on the socket and then close it before the client's read. Will the client be able to read the message?"
-            // Yes. The client will get the data that was sent before the FIN packet that closes the socket.
             int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
-            // debug(sent_to_client);
             if (sent_to_client == -1)
             {
                 perror("Error while writing to client. Seems socket has been closed");
@@ -221,6 +219,7 @@ void *thread_func(void *arg)
     int index_of_thread = *(int *)arg;
     struct sockaddr_in serv_addr_obj, client_addr_obj;
     wel_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    socket_map[index_of_thread] = wel_socket_fd;
     if (wel_socket_fd < 0)
     {
         perror("ERROR creating welcoming socket");
@@ -237,21 +236,35 @@ void *thread_func(void *arg)
         exit(-1);
     }
     listen(wel_socket_fd, MAX_CLIENTS);
-  //  cout << "Server has started listening on the LISTEN PORT" << endl;
+    cout << "Server has started listening on the LISTEN PORT" << endl;
     clilen = sizeof(client_addr_obj);
     while (1)
     {
-       // printf("Waiting for a new client to request for a connection\n");
         client_socket_fd = accept(wel_socket_fd, (struct sockaddr *)&client_addr_obj, &clilen);
         if (client_socket_fd < 0)
         {
             perror("ERROR while accept() system call occurred in SERVER");
             exit(-1);
         }
-       // printf(BGRN "New client connected from port number %d and IP %s \n" ANSI_RESET, ntohs(client_addr_obj.sin_port), inet_ntoa(client_addr_obj.sin_addr));
+        printf(BGRN "New client connected from port number %d and IP %s \n" ANSI_RESET, ntohs(client_addr_obj.sin_port), inet_ntoa(client_addr_obj.sin_addr));
         string s = handle_connection(client_socket_fd);
+        if (index_of_thread == destination)
+        {
+            cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
+                 << " None ; Message :"
+                 << "\"" << s << "\"" << endl;
+        }
+        else
+        {
+            current_index++;
+            int next_index = path[destination][current_index];
+            int file_descriptor = socket_map[next_index];
+            cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
+                 << next_index << "; Message :"
+                 << "\"" << s << "\"" << endl;
+            send_string_on_socket(file_descriptor, s);
+        }
     }
-
     close(wel_socket_fd);
     return 0;
 }
