@@ -21,7 +21,7 @@
 using namespace std;
 /////////////////////////////
 
-//Regular bold text
+// Regular bold text
 #define BBLK "\e[1;30m"
 #define BRED "\e[1;31m"
 #define BGRN "\e[1;32m"
@@ -47,36 +47,27 @@ pair<string, int> read_string_from_socket(int fd, int bytes)
 {
     std::string output;
     output.resize(bytes);
-
     int bytes_received = read(fd, &output[0], bytes - 1);
     // debug(bytes_received);
     if (bytes_received <= 0)
     {
         cerr << "Failed to read data from socket. Seems server has closed socket\n";
-        // return "
         exit(-1);
     }
-
     // debug(output);
     output[bytes_received] = 0;
     output.resize(bytes_received);
-
     return {output, bytes_received};
 }
 
 int send_string_on_socket(int fd, const string &s)
 {
-    // cout << "We are sending " << s << endl;
     int bytes_sent = write(fd, s.c_str(), s.length());
-    // debug(bytes_sent);
-    // debug(s);
     if (bytes_sent < 0)
     {
         cerr << "Failed to SEND DATA on socket.\n";
-        // return "
         exit(-1);
     }
-
     return bytes_sent;
 }
 
@@ -99,11 +90,11 @@ int get_socket_fd(struct sockaddr_in *ptr)
 
     memset(&server_obj, 0, sizeof(server_obj)); // Zero out structure
     server_obj.sin_family = AF_INET;
-    server_obj.sin_port = htons(port_num); //convert to big-endian order
+    server_obj.sin_port = htons(port_num); // convert to big-endian order
 
     // Converts an IP address in numbers-and-dots notation into either a
     // struct in_addr or a struct in6_addr depending on whether you specify AF_INET or AF_INET6.
-    //https://stackoverflow.com/a/20778887/6427607
+    // https://stackoverflow.com/a/20778887/6427607
 
     /////////////////////////////////////////////////////////////////////////////////////////
     /* connect to server */
@@ -114,23 +105,21 @@ int get_socket_fd(struct sockaddr_in *ptr)
         exit(-1);
     }
 
-    //part;
-    // printf(BGRN "Connected to server\n" ANSI_RESET);
     // part;
+    //  printf(BGRN "Connected to server\n" ANSI_RESET);
+    //  part;
     return socket_fd;
 }
 ////////////////////////////////////////////////////////
 
 void begin_process()
 {
-    struct sockaddr_in server_obj;
-    int socket_fd = get_socket_fd(&server_obj);
 
-
-    cout << "Connection to server successful" << endl;
-    
     while (true)
     {
+        struct sockaddr_in server_obj;
+        int socket_fd = get_socket_fd(&server_obj);
+        cout << "Connection to server successful" << endl;
         string to_send;
         cout << "Enter msg: ";
         getline(cin, to_send);
