@@ -56,7 +56,7 @@ vector<string> argument_string;
 int total_vertices = 0;
 int total_edges = 0;
 vector<vector<int>> path;
-int destination = -1;
+// int destination = -1;
 int source = 0;
 int current_index = 0;
 int max_index = -1;
@@ -187,10 +187,9 @@ void handle_connection(int client_socket_fd)
         }
         else if (argument_string.size() == 3 && argument_string[0] == "send" && isNumber(argument_string[1]) && (stoi(argument_string[1]) < total_vertices) && (stoi(argument_string[1]) >= 0))
         {
-            destination = stoi(argument_string[1]);
             struct sockaddr_in server_obj;
             int socket_fd = get_socket_fd(&server_obj, port_number_map[0]);
-            int start_client = send_string_on_socket(socket_fd, argument_string[2], 0);
+            int start_client = send_string_on_socket(socket_fd,cmd,0);
             if (start_client == -1)
             {
                 perror("Error while writing to start client.Seems socket has been closed");
@@ -270,12 +269,20 @@ void *thread_func(void *arg)
         }
         printf(BGRN "New client connected from port number %d and IP %s \n" ANSI_RESET, ntohs(client_addr_obj.sin_port), inet_ntoa(client_addr_obj.sin_addr));
         string s = handle_thread_connection(client_socket_fd);
+        argument_string = {};
+        stringstream ss(s);
+        string word;
+        while (ss >> word)
+        {
+            argument_string.push_back(word);
+        }
+        int destination = stoi(argument_string[1]);
         if (index_of_thread == destination)
         {
             printf(BYEL);
             cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
                  << " None ; Message :"
-                 << "\"" << s << "\"" << endl;
+                 << "\"" << argument_string[2] << "\"" << endl;
             printf(ANSI_RESET);
             current_index = 0;
         }
@@ -287,7 +294,7 @@ void *thread_func(void *arg)
             int file_descriptor = socket_map[next_index];
             cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
                  << next_index << "; Message :"
-                 << "\"" << s << "\"" << endl;
+                 << "\"" << argument_string[2] << "\"" << endl;
             printf(ANSI_RESET);
             struct sockaddr_in server_obj;
             int socket_fd = get_socket_fd(&server_obj, port_number_map[next_index]);
@@ -301,7 +308,7 @@ void *thread_func(void *arg)
                     break;
                 }
             }
-            send_string_on_socket(socket_fd, s, adj[index_of_thread][delay_index].second);
+            send_string_on_socket(socket_fd,s, adj[index_of_thread][delay_index].second);
             async(launch::async, send_string_on_socket, socket_fd, s, adj[index_of_thread][delay_index].second);
         }
     }
