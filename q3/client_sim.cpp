@@ -125,10 +125,10 @@ void begin_process()
         getline(cin, to_send);
         send_string_on_socket(socket_fd, to_send);
         int num_bytes_read;
-        string output_msg;
-        tie(output_msg, num_bytes_read) = read_string_from_socket(socket_fd, buff_sz);
-        cout << "Received: " << output_msg << endl;
-        cout << "====" << endl;
+        // string output_msg;
+        // tie(output_msg, num_bytes_read) = read_string_from_socket(socket_fd, buff_sz);
+        // cout << "Received: " << output_msg << endl;
+        // cout << "====" << endl;
     }
     // part;
 }
