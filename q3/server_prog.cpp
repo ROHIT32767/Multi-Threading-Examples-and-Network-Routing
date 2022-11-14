@@ -134,6 +134,8 @@ void handle_connection(int client_socket_fd)
 {
     int received_num, sent_num;
     int ret_val = 1;
+    char buffer_string[total_vertices][200];
+    char title_string[100];
     while (true)
     {
         string cmd;
@@ -150,10 +152,13 @@ void handle_connection(int client_socket_fd)
             cout << "Exit pressed by client" << endl;
             goto close_client_socket_ceremony;
         }
-        string msg_to_send_back = cmd;
+        string msg_to_send_back = "Ack :" + cmd;
         argument_string = {};
         stringstream ss(cmd);
         string word;
+        struct sockaddr_in server_obj1;
+        int socket_fd1 = get_socket_fd(&server_obj1, PORT_ARG);
+        send_string_on_socket(socket_fd1, msg_to_send_back);
         while (ss >> word)
         {
             argument_string.push_back(word);
@@ -161,24 +166,29 @@ void handle_connection(int client_socket_fd)
         if (argument_string.size() == 1 && argument_string[0] == "pt")
         {
             int col_width = 10;
-            cout << setw(col_width) << "dest";
-            cout << setw(col_width) << "forw";
-            cout << setw(col_width) << "delay" << endl;
+            char string1[10] = "dest";
+            char string2[10] = "forw";
+            char string3[10] = "delay";
+            string final_string;
+            sprintf(title_string, "%10s\t%10s\t%10s\n", string1, string2, string3);
+            final_string = title_string;
             for (int i = 1; i < total_vertices; i++)
             {
-                if (path[i].size() != 1)
+                if (path[i].size() != 0)
                 {
-                    cout << setw(col_width) << i;
-                    cout << setw(col_width) << path[i][1];
-                    cout << setw(col_width) << dist[i] << endl;
+                    sprintf(buffer_string[i], "%10d\t%10d\t%10d\n", i, path[i][1], dist[i]);
+                    final_string += buffer_string[i];
                 }
                 else
                 {
-                    cout << setw(col_width) << i;
-                    cout << setw(col_width) << "None";
-                    cout << setw(col_width) << dist[i] << endl;
+                    char none[5]="None";
+                    sprintf(buffer_string[i], "%10d\t%10s\t%10d\n", i, none, dist[i]);
+                    final_string += buffer_string[i];
                 }
             }
+            struct sockaddr_in server_obj1;
+            int socket_fd1 = get_socket_fd(&server_obj1, PORT_ARG);
+            send_string_on_socket(socket_fd1, final_string);
         }
         else if (argument_string.size() == 3 && argument_string[0] == "send" && isNumber(argument_string[1]) && (stoi(argument_string[1]) < total_vertices) && (stoi(argument_string[1]) >= 0))
         {
@@ -192,16 +202,15 @@ void handle_connection(int client_socket_fd)
                 goto close_client_socket_ceremony;
             }
         }
-        int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
-        if (sent_to_client == -1)
-        {
-            perror("Error while writing to client. Seems socket has been closed");
-            goto close_client_socket_ceremony;
-        }
+        // int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
+        // if (sent_to_client == -1)
+        // {
+        //     perror("Error while writing to client. Seems socket has been closed");
+        //     goto close_client_socket_ceremony;
+        // }
         return;
     }
 close_client_socket_ceremony:
-    printf("socket closed\n");
     close(client_socket_fd);
     printf(BRED "Disconnected from client" ANSI_RESET "\n");
     // return NULL;
@@ -232,7 +241,6 @@ void *thread_func(void *arg)
     int wel_socket_fd, client_socket_fd, port_number;
     socklen_t clilen;
     int index_of_thread = *(int *)arg;
-    printf("index of thread is %d\n", index_of_thread);
     struct sockaddr_in serv_addr_obj, client_addr_obj;
     wel_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     socket_map[index_of_thread] = wel_socket_fd;
@@ -251,11 +259,13 @@ void *thread_func(void *arg)
         perror("Error on bind on welcome socket: ");
         exit(-1);
     }
-
+    char buffer[2000];
+    char msg[1000];
     while (1)
     {
         listen(wel_socket_fd, MAX_CLIENTS);
-        cout << "Server has started listening on the LISTEN PORT" << endl;
+        cout << "Server"
+             << "Node " << index_of_thread << " has started listening on the LISTEN PORT" << endl;
         clilen = sizeof(client_addr_obj);
         client_socket_fd = accept(wel_socket_fd, (struct sockaddr *)&client_addr_obj, &clilen);
         if (client_socket_fd < 0)
@@ -265,25 +275,36 @@ void *thread_func(void *arg)
         }
         printf(BGRN "New client connected from port number %d and IP %s \n" ANSI_RESET, ntohs(client_addr_obj.sin_port), inet_ntoa(client_addr_obj.sin_addr));
         string s = handle_thread_connection(client_socket_fd);
+        int string_length = s.size();
+        for (int i = 0; i < string_length; i++)
+        {
+            msg[i] = s[i];
+        }
+        msg[string_length] = '\0';
         if (index_of_thread == destination)
         {
-            cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
-                 << " None ; Message :"
-                 << "\"" << s << "\"" << endl;
+            sprintf(buffer, "Data received at node: %d : Source: %d; Destination :%d; Forwarded_Destination : None ; Message \"%s\"\n", index_of_thread, source, destination,msg);
+            struct sockaddr_in server_obj;
+            int socket_fd = get_socket_fd(&server_obj, PORT_ARG);
+            send_string_on_socket(socket_fd, buffer);
             current_index = 0;
+            msg[0]='\0';
         }
         else
         {
             current_index++;
             int next_index = path[destination][current_index];
             int file_descriptor = socket_map[next_index];
-            cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
-                 << next_index << "; Message :"
-                 << "\"" << s << "\"" << endl;
+            sprintf(buffer, "Data received at node: %d : Source: %d; Destination :%d; Forwarded_Destination : %d; Message \"%s\"\n", index_of_thread, source, destination, next_index,msg);
             struct sockaddr_in server_obj;
             int socket_fd = get_socket_fd(&server_obj, port_number_map[next_index]);
             send_string_on_socket(socket_fd, s);
+            struct sockaddr_in server_obj1;
+            int socket_fd1 = get_socket_fd(&server_obj1, PORT_ARG);
+            send_string_on_socket(socket_fd1, buffer);
+            msg[0]='\0';
         }
+        buffer[0] = '\0';
     }
     close(wel_socket_fd);
     return 0;
@@ -371,7 +392,6 @@ int main(int argc, char *argv[])
         exit(-1);
     }
     //////////////////////////////////////////////////////////////////////////////////////
-
     pthread_t node_threads[total_vertices];
     for (int i = 0; i < total_vertices; i++)
     {
@@ -382,7 +402,9 @@ int main(int argc, char *argv[])
     while (1)
     {
         listen(wel_socket_fd, MAX_CLIENTS);
-        cout << "Server " << 0 << " has started listening on the LISTEN PORT" << endl;
+        cout << "Server "
+             << "main"
+             << " has started listening on the LISTEN PORT" << endl;
         clilen = sizeof(client_addr_obj);
 
         printf("Waiting for a new client to request for a connection\n");
@@ -396,10 +418,5 @@ int main(int argc, char *argv[])
         handle_connection(client_socket_fd);
     }
     close(wel_socket_fd);
-    // for (int i = 0; i < total_vertices; i++)
-    // {
-    //     pthread_join(node_threads[i], NULL);
-    // }
-    // printf("end\n");
     return 0;
 }
