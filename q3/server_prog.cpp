@@ -134,8 +134,6 @@ void handle_connection(int client_socket_fd)
 {
     int received_num, sent_num;
     int ret_val = 1;
-    char buffer_string[total_vertices][200];
-    char title_string[100];
     while (true)
     {
         string cmd;
@@ -166,29 +164,26 @@ void handle_connection(int client_socket_fd)
         if (argument_string.size() == 1 && argument_string[0] == "pt")
         {
             int col_width = 10;
-            char string1[10] = "dest";
-            char string2[10] = "forw";
-            char string3[10] = "delay";
-            string final_string;
-            sprintf(title_string, "%10s\t%10s\t%10s\n", string1, string2, string3);
-            final_string = title_string;
+            string title_string = "dest";
+            title_string += "\t";
+            title_string += "forw";
+            title_string += "\t";
+            title_string += "delay";
+            string buffer[total_vertices];
             for (int i = 1; i < total_vertices; i++)
             {
                 if (path[i].size() != 0)
                 {
-                    sprintf(buffer_string[i], "%10d\t%10d\t%10d\n", i, path[i][1], dist[i]);
-                    final_string += buffer_string[i];
+                    buffer[i] = i + '\t' + path[i][1] + '\t' + dist[i] + '\n';
+                    title_string += buffer[i];
                 }
                 else
                 {
-                    char none[5]="None";
-                    sprintf(buffer_string[i], "%10d\t%10s\t%10d\n", i, none, dist[i]);
-                    final_string += buffer_string[i];
+                    buffer[i] = i + '\t' + "None" + '\t' + dist[i] + '\n';
+                    title_string += buffer[i];
                 }
             }
-            struct sockaddr_in server_obj1;
-            int socket_fd1 = get_socket_fd(&server_obj1, PORT_ARG);
-            send_string_on_socket(socket_fd1, final_string);
+            int sent_to_client = send_string_on_socket(client_socket_fd, title_string);
         }
         else if (argument_string.size() == 3 && argument_string[0] == "send" && isNumber(argument_string[1]) && (stoi(argument_string[1]) < total_vertices) && (stoi(argument_string[1]) >= 0))
         {
@@ -202,12 +197,12 @@ void handle_connection(int client_socket_fd)
                 goto close_client_socket_ceremony;
             }
         }
-        // int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
-        // if (sent_to_client == -1)
-        // {
-        //     perror("Error while writing to client. Seems socket has been closed");
-        //     goto close_client_socket_ceremony;
-        // }
+        int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
+        if (sent_to_client == -1)
+        {
+            perror("Error while writing to client. Seems socket has been closed");
+            goto close_client_socket_ceremony;
+        }
         return;
     }
 close_client_socket_ceremony:
@@ -259,8 +254,6 @@ void *thread_func(void *arg)
         perror("Error on bind on welcome socket: ");
         exit(-1);
     }
-    char buffer[2000];
-    char msg[1000];
     while (1)
     {
         listen(wel_socket_fd, MAX_CLIENTS);
@@ -276,14 +269,9 @@ void *thread_func(void *arg)
         printf(BGRN "New client connected from port number %d and IP %s \n" ANSI_RESET, ntohs(client_addr_obj.sin_port), inet_ntoa(client_addr_obj.sin_addr));
         string s = handle_thread_connection(client_socket_fd);
         int string_length = s.size();
-        for (int i = 0; i < string_length; i++)
-        {
-            msg[i] = s[i];
-        }
-        msg[string_length] = '\0';
         if (index_of_thread == destination)
         {
-            sprintf(buffer, "Data received at node: %d : Source: %d; Destination :%d; Forwarded_Destination : None ; Message \"%s\"\n", index_of_thread, source, destination,msg);
+            string bu
             struct sockaddr_in server_obj;
             int socket_fd = get_socket_fd(&server_obj, PORT_ARG);
             send_string_on_socket(socket_fd, buffer);
