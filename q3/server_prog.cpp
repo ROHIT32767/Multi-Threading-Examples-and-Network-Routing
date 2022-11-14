@@ -159,12 +159,6 @@ void handle_connection(int client_socket_fd)
                     cout << setw(col_width) << dist[i] << endl;
                 }
             }
-            int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
-            if (sent_to_client == -1)
-            {
-                perror("Error while writing to client. Seems socket has been closed");
-                goto close_client_socket_ceremony;
-            }
         }
         else if (argument_string.size() == 3 && argument_string[0] == "send" && isNumber(argument_string[1]) && (stoi(argument_string[1]) < total_vertices) && (stoi(argument_string[1]) >= 0))
         {
@@ -172,30 +166,24 @@ void handle_connection(int client_socket_fd)
             destination = stoi(argument_string[1]);
             send_func = 1;
             int next_index = path[destination][current_index];
-            int start_client = send_string_on_socket(socket_map[next_index],argument_string[2]);
+            int start_client = send_string_on_socket(socket_map[next_index], argument_string[2]);
             if (start_client == -1)
             {
                 perror("Error while writing to start client.Seems socket has been closed");
                 goto close_client_socket_ceremony;
             }
             printf("entered send\n");
-            int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
-            printf("entered send\n");
-            if (sent_to_client == -1)
-            {
-                perror("Error while writing to client. Seems socket has been closed");
-                goto close_client_socket_ceremony;
-            }
+            struct sockaddr_in server_obj;
+            int socket_fd = get_socket_fd(&server_obj, port_number_map[0]);
+            send_string_on_socket(socket_fd, cmd);
         }
-        else
+        int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
+        if (sent_to_client == -1)
         {
-            int sent_to_client = send_string_on_socket(client_socket_fd, msg_to_send_back);
-            if (sent_to_client == -1)
-            {
-                perror("Error while writing to client. Seems socket has been closed");
-                goto close_client_socket_ceremony;
-            }
+            perror("Error while writing to client. Seems socket has been closed");
+            goto close_client_socket_ceremony;
         }
+        return;
     }
 close_client_socket_ceremony:
     printf("socket closed\n");
@@ -217,8 +205,6 @@ string handle_thread_connection(int client_socket_fd)
             printf("Server could not read msg sent from client\n");
             goto close_client_socket_ceremony;
         }
-        printf("closed socket\n");
-        close(client_socket_fd);
         return cmd;
     }
 close_client_socket_ceremony:
@@ -226,43 +212,24 @@ close_client_socket_ceremony:
     printf(BRED "Disconnected from client" ANSI_RESET "\n");
     return NULL;
 }
-int get_socket_fd(struct sockaddr_in *ptr,int portnumber)
+int get_socket_fd(struct sockaddr_in *ptr, int portnumber)
 {
     struct sockaddr_in server_obj = *ptr;
-
-    // socket() creates an endpoint for communication and returns a file
-    //        descriptor that refers to that endpoint.  The file descriptor
-    //        returned by a successful call will be the lowest-numbered file
-    //        descriptor not currently open for the process.
     int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fd < 0)
     {
         perror("Error in socket creation for CLIENT");
         exit(-1);
     }
-    /////////////////////////////////////////////////////////////////////////////////////
     int port_num = portnumber;
-
     memset(&server_obj, 0, sizeof(server_obj)); // Zero out structure
     server_obj.sin_family = AF_INET;
     server_obj.sin_port = htons(port_num); // convert to big-endian order
-
-    // Converts an IP address in numbers-and-dots notation into either a
-    // struct in_addr or a struct in6_addr depending on whether you specify AF_INET or AF_INET6.
-    // https://stackoverflow.com/a/20778887/6427607
-
-    /////////////////////////////////////////////////////////////////////////////////////////
-    /* connect to server */
-
     if (connect(socket_fd, (struct sockaddr *)&server_obj, sizeof(server_obj)) < 0)
     {
         perror("Problem in connecting to the server");
         exit(-1);
     }
-
-    // part;
-    //  printf(BGRN "Connected to server\n" ANSI_RESET);
-    //  part;
     return socket_fd;
 }
 void *thread_func(void *arg)
@@ -289,11 +256,12 @@ void *thread_func(void *arg)
         perror("Error on bind on welcome socket: ");
         exit(-1);
     }
-    listen(wel_socket_fd, MAX_CLIENTS);
-    cout << "Server has started listening on the LISTEN PORT" << endl;
-    clilen = sizeof(client_addr_obj);
+
     while (1)
     {
+        listen(wel_socket_fd, MAX_CLIENTS);
+        cout << "Server has started listening on the LISTEN PORT" << endl;
+        clilen = sizeof(client_addr_obj);
         client_socket_fd = accept(wel_socket_fd, (struct sockaddr *)&client_addr_obj, &clilen);
         if (client_socket_fd < 0)
         {
@@ -301,30 +269,22 @@ void *thread_func(void *arg)
             exit(-1);
         }
         printf(BGRN "New client connected from port number %d and IP %s \n" ANSI_RESET, ntohs(client_addr_obj.sin_port), inet_ntoa(client_addr_obj.sin_addr));
-        if (index_of_thread == 0)
+        string s = handle_thread_connection(client_socket_fd);
+        if (index_of_thread == destination)
         {
-            handle_connection(client_socket_fd);
+            cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
+                 << " None ; Message :"
+                 << "\"" << s << "\"" << endl;
         }
         else
         {
-            string s = handle_thread_connection(client_socket_fd);
-            if (index_of_thread == destination)
-            {
-                send_func = 1;
-                cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
-                     << " None ; Message :"
-                     << "\"" << s << "\"" << endl;
-            }
-            else
-            {
-                current_index++;
-                int next_index = path[destination][current_index];
-                int file_descriptor = socket_map[next_index];
-                cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
-                     << next_index << "; Message :"
-                     << "\"" << s << "\"" << endl;
-                send_string_on_socket(file_descriptor, s);
-            }
+            current_index++;
+            int next_index = path[destination][current_index];
+            int file_descriptor = socket_map[next_index];
+            cout << "Data received at node: " << index_of_thread << ": Source: " << source << "; Destination :" << destination << "; Forwarded_Destination : "
+                 << next_index << "; Message :"
+                 << "\"" << s << "\"" << endl;
+            send_string_on_socket(file_descriptor, s);
         }
     }
     close(wel_socket_fd);
@@ -346,7 +306,7 @@ int main(int argc, char *argv[])
     total_edges = m;
     total_vertices = n;
     adj.assign(n, vector<pair<int, int>>());
-    int current_port_number = 8001;
+    int current_port_number = 8002;
     for (int i = 0; i < n; i++)
     {
         port_number_map[i] = current_port_number;
@@ -392,6 +352,28 @@ int main(int argc, char *argv[])
         find_path(i, parent, path[i]);
     }
     /********************************************/
+    /////////////////////////////////////////////////////////////////////////
+    int wel_socket_fd, client_socket_fd, port_number;
+    socklen_t clilen;
+    struct sockaddr_in serv_addr_obj, client_addr_obj;
+    wel_socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (wel_socket_fd < 0)
+    {
+        perror("ERROR creating welcoming socket");
+        exit(-1);
+    }
+    bzero((char *)&serv_addr_obj, sizeof(serv_addr_obj));
+    port_number = PORT_ARG;
+    serv_addr_obj.sin_family = AF_INET;
+    serv_addr_obj.sin_addr.s_addr = INADDR_ANY;
+    serv_addr_obj.sin_port = htons(port_number); // process specifies port
+    if (bind(wel_socket_fd, (struct sockaddr *)&serv_addr_obj, sizeof(serv_addr_obj)) < 0)
+    {
+        perror("Error on bind on welcome socket: ");
+        exit(-1);
+    }
+    //////////////////////////////////////////////////////////////////////////////////////
+
     pthread_t node_threads[total_vertices];
     for (int i = 0; i < total_vertices; i++)
     {
@@ -399,10 +381,28 @@ int main(int argc, char *argv[])
         pthread_create(&node_threads[i], NULL, thread_func, &index_m);
         sleep(1);
     }
+    while (1)
+    {
+        listen(wel_socket_fd, MAX_CLIENTS);
+        cout << "Server " << 0 << " has started listening on the LISTEN PORT" << endl;
+        clilen = sizeof(client_addr_obj);
+
+        printf("Waiting for a new client to request for a connection\n");
+        client_socket_fd = accept(wel_socket_fd, (struct sockaddr *)&client_addr_obj, &clilen);
+        if (client_socket_fd < 0)
+        {
+            perror("ERROR while accept() system call occurred in SERVER");
+            exit(-1);
+        }
+
+        printf(BGRN "New client connected from port number %d and IP %s \n" ANSI_RESET, ntohs(client_addr_obj.sin_port), inet_ntoa(client_addr_obj.sin_addr));
+        handle_connection(client_socket_fd);
+    }
+    close(wel_socket_fd);
     for (int i = 0; i < total_vertices; i++)
     {
         pthread_join(node_threads[i], NULL);
     }
-    printf("end\n");
+    // printf("end\n");
     return 0;
 }
